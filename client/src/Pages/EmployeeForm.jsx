@@ -3,8 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 // import axios from "../../../services/api"; // Your axios instance
 import axios from "axios";
-axios.defaults.baseURL  = "http://localhost:5000"
-
 const EmployeeForm = () => {
   const navigate = useNavigate();
 
@@ -42,8 +40,8 @@ const EmployeeForm = () => {
     }
 
     try {
-      // Make API request to add the employee
-      const response = await axios.post("/", formData);
+      console.log(formData)
+      const response = await axios.post("http://localhost:5000/api/employees", formData);
       if (response.status === 201) {
         navigate("/employees"); // Redirect to employee list after successful add
       }

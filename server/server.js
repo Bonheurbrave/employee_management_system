@@ -30,30 +30,12 @@ const employeeSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true },
     position: { type: String, required: true },
     department: { type: String, required: true },
-    phone:{type:String , required:true , unique:true},
-    address:{type:String }
+    phone: { type: String, required: true, unique: true },
+    address: { type: String }
 });
-
-const attendanceSchema = new mongoose.Schema({
-    employeeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
-    date: { type: Date, required: true },
-    status: { type: String, enum: ['Present', 'Absent', 'On Leave'], required: true },
-});
-
-const leaveRequestSchema = new mongoose.Schema({
-    employeeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
-    startDate: { type: Date, required: true },
-    endDate: { type: Date, required: true },
-    reason: { type: String, required: true },
-    status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
-});
-
 // Models
 const Admin = mongoose.model('Admin', adminSchema);
 const Employee = mongoose.model('Employee', employeeSchema);
-const Attendance = mongoose.model('Attendance', attendanceSchema);
-const LeaveRequest = mongoose.model('LeaveRequest', leaveRequestSchema);
-
 // Middleware for authentication
 const authenticate = async (req, res, next) => {
     const token = req.headers.authorization?.split(' ')[1];
@@ -73,14 +55,14 @@ const authenticate = async (req, res, next) => {
 
 // Admin registration
 app.post('/api/admin/register', async (req, res) => {
-    const { username,email,  password } = req.body;
+    const { username, email, password } = req.body;
 
     const existingAdmin = await Admin.findOne({ username });
     const existingEmail = await Admin.findOne({ email });
     if (existingAdmin || existingEmail) return res.status(400).json({ message: 'Admin already exists' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const admin = new Admin({ username, email , password: hashedPassword });
+    const admin = new Admin({ username, email, password: hashedPassword });
     await admin.save();
 
     res.status(201).json({ message: 'Admin registered successfully' });
@@ -99,53 +81,41 @@ app.post('/api/admin/login', async (req, res) => {
 });
 
 // Add new employee
-app.post('/api/employees', authenticate, async (req, res) => {
-    res.send(req.body)
-    const { name, email, position, department } = req.body;
+app.post('/api/employees', async (req, res) => {
+    const { name, email, position, department, phone, address } = req.body;
     const existingEmployee = await Employee.findOne({ email });
-    if (existingEmployee) return res.status(400).json({ message: 'Employee already exists' });
-
-    const employee = new Employee({ name, email, position, department });
+    const existingPhone = await Employee.findOne({ phone })
+    if (existingEmployee || existingPhone) return res.status(400).json({ message: 'Employee already exists' });
+    const employee = new Employee({ name, email, position, department, phone, address });
     await employee.save();
     res.status(201).json(employee);
 });
 
 // List all employees
-app.get('/api/employees', authenticate, async (req, res) => {
+app.get('/api/employees', async (req, res) => {
     const employees = await Employee.find();
     res.json(employees);
 });
 
-// Edit employee details
-app.put('/api/employees/:id', authenticate, async (req, res) => {
-    const { name, email, position, department } = req.body;
+app.delete("/api/employees/:id", async (req, res) => {
+    const id = req.params.id;
+    await Employee.deleteOne({ _id: id })
+})
 
-    const employee = await Employee.findById(req.params.id);
-    if (!employee) return res.status(404).json({ message: 'Employee not found' });
 
-    employee.name = name || employee.name;
-    employee.email = email || employee.email;
-    employee.position = position || employee.position;
-    employee.department = department || employee.department;
-    await employee.save();
 
-    res.json(employee);
-});
 
 // Record attendance
 app.post('/api/attendance', authenticate, async (req, res) => {
     const { employeeId, date, status } = req.body;
-
     const attendance = new Attendance({ employeeId, date, status });
     await attendance.save();
-
     res.status(201).json(attendance);
 });
 
 // Submit leave request
-app.post('/api/leaves', authenticate, async (req, res) => {
+app.post('/api/leaves', async (req, res) => {
     const { employeeId, startDate, endDate, reason } = req.body;
-
     const leaveRequest = new LeaveRequest({ employeeId, startDate, endDate, reason });
     await leaveRequest.save();
 
@@ -161,6 +131,87 @@ app.get('/api/dashboard', authenticate, async (req, res) => {
     res.json({ employeeCount, leaveCount, attendanceCount });
 });
 
-// Start server
+//edit the employee data
+
+// Update employee endpoint
+app.put("/employees/:id", async (req, res) => {
+    const { id } = req.params;
+    const updateData = req.body;
+  
+    try {
+      const updatedEmployee = await Employee.findByIdAndUpdate(
+        id,
+        { $set: updateData },
+        { new: true, runValidators: true }
+      );
+  
+      if (!updatedEmployee) {
+        return res.status(404).json({ message: "Employee not found" });
+      }
+  
+      res.json({
+        message: "Employee updated successfully",
+        employee: updatedEmployee,
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "An error occurred", error: err.message });
+    }
+  });
+
+
+
+app.get("/employee/:id", async (req, res) => {
+    const id = req.params.id;
+    await Employee.findOne({ _id: id }).then((respo) => res.send(respo))
+})
+
+
+
+app.get('/api/admins', async (req, res) => {
+    try {
+      
+      const admin = await Admin.findOne({});
+
+      if (!admin) {
+        return res.status(404).json({ error: 'Admin not found' });
+      }
+
+      admin.password = '********';
+      res.json(admin);
+    } catch (error) {
+      console.error('Error fetching admin data:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+
+  app.put('/api/admins/:id', async (req, res) => {
+    console.log(req.params.id)
+    try {
+      const { id } = req.params;
+      const { email, username } = req.body; // Add fields you want to update
+  
+      if (!email || !username) {
+        return res.status(400).json({ error: 'Email and username are required' });
+      }
+  
+      const updatedAdmin = await Admin.findOneAndUpdate(
+        { _id: id},
+        { $set: { email, username } },
+        { returnDocument: 'after' }
+      );
+  
+      if (!updatedAdmin.value) {
+        return res.status(404).json({ error: 'Successfully done!' });
+      }
+  
+      res.json({ message: 'Admin updated successfully', admin: updatedAdmin.value });
+    } catch (error) {
+      console.error('Error updating admin data:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
